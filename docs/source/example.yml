@@ -1,0 +1,32 @@
+version: 0
+
+includes:
+  - name: example_stack
+    path: ./example_stack.yml
+
+services:
+  - name: example-static
+    host: example.com
+    protocol: http
+    port: 4443
+    method: get
+    path: /asdf/*/*.js
+
+    handler: run.static
+
+  - name: example-template
+    template: example-static
+
+  - name: example-template-overwrite
+    template: example-static
+    port: 443
+    tlskey: ./key.pem
+    tlscert: ./cert.pem
+
+  - name: example-handler
+    host: example.com
+    path: /api/
+
+    handler: run.main
+
+  - stack: example_stack

@@ -1,0 +1,30 @@
+name: Documentation
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+
+jobs:
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        fetch-depth: 1
+
+    - uses: actions/setup-python@v1
+      with:
+        python-version: 3.7
+
+    - name: Set up dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install tox
+
+    - name: Build documentation
+      run: tox -e doc

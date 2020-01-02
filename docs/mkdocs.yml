@@ -1,0 +1,17 @@
+site_name: mimus
+repo_url: https://github.com/IanChen83/mimus
+repo_name: IanChen83/mimus
+edit_uri: ''
+site_description: create mock services with ease
+docs_dir: source
+
+nav:
+  - Home: 'index.md'
+
+theme:
+  name: material
+  logo:
+    icon: 'language'
+# extra_css: [extra.css]
+markdown_extensions:
+  - codehilite
