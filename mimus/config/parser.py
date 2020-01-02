@@ -3,8 +3,6 @@ parser parses config files
 """
 from pathlib import Path
 from itertools import chain
-from enum import Enum
-from copy import copy
 
 from ruamel.yaml import YAML
 
@@ -121,8 +119,8 @@ class State:
 
             self.includes[inc.name] = inc
 
-        for parser in chain.from_iterable(parser for parser in self.parsers):
-            service = parser.services
+        for _parser in chain.from_iterable(parser for parser in self.parsers):
+            service = _parser.services
 
             if not hasattr(service, "name"):
                 continue
@@ -160,7 +158,7 @@ class State:
                 included_stacks.add(parser)
 
                 unhandled_services.extend(
-                    reversed(self.resolve_stack(inc, parser)))
+                    reversed(self.resolve_stack(parser)))
 
             elif isinstance(service, TemplateServiceItem):
                 template = service.template
