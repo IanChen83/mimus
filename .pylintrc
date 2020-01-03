@@ -7,11 +7,14 @@ extension-pkg-whitelist=
 
 # Add files or directories to the blacklist. They should be base names, not
 # paths.
-ignore=CVS
+ignore=
+    CVS,
+    features
 
 # Add files or directories matching the regex patterns to the blacklist. The
 # regex matches against base names, not paths.
-ignore-patterns=features
+ignore-patterns=
+    test_*
 
 # Python code to execute, usually for sys.path manipulation such as
 # pygtk.require().
@@ -143,7 +146,9 @@ disable=print-statement,
         missing-class-docstring,
         missing-function-docstring,
         too-few-public-methods,
-        too-many-instance-attributes
+        too-many-instance-attributes,
+        too-many-arguments,
+        fixme
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
@@ -513,7 +518,7 @@ int-import-graph=
 known-standard-library=
 
 # Force import order to recognize a module as part of a third party library.
-known-third-party=enchant
+known-third-party=
 
 
 [CLASSES]
