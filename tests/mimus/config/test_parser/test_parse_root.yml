@@ -1,0 +1,10 @@
+version: 0
+
+includes:
+    - name: test_parse_include
+      path: test_parse_include.yml
+
+services:
+    - name: name
+
+    - stack: test_parse_include

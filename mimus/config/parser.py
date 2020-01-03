@@ -8,16 +8,16 @@ from ruamel.yaml import YAML
 
 
 __all__ = (
-    'CURRENT_VERSION',
-    'SUPPORTED_PARSERS',
-    'load',
-    'loads',
-    'Config',
-    'Parser',
-    'StackServiceItem',
-    'TemplateServiceItem',
-    'ServiceItem',
-    'ConfigError',
+    "CURRENT_VERSION",
+    "SUPPORTED_PARSERS",
+    "load",
+    "loads",
+    "Config",
+    "Parser",
+    "StackServiceItem",
+    "TemplateServiceItem",
+    "ServiceItem",
+    "ConfigError",
 )
 
 
@@ -68,8 +68,7 @@ def loads(data, *, file=""):
             raise ConfigError("'file' should be a valid file path")
         cwd = file_path.parent
 
-    parser = Parser()
-    parser.parse(data, cwd)
+    parser = Parser.parse(data, cwd, file)
 
 
 class Parser:
@@ -78,57 +77,81 @@ class Parser:
         self.includes = {}
         self.configs = {}
 
-    def parse(self, content, cwd, file=""):
+    def parse_config(self, content, cwd, file):
         cwd = cwd.resolve()
-        config = _parse_config_by_version(content, cwd, file=file)
-        self.configs[file] = config
+        if file != "":
+            file = str(Path(file).resolve())
+
+        if file not in self.configs:
+            self.configs[file] = _parse_config_by_version(content, cwd, file=file)
+
+        return self.configs[file]
+
+    def register_include(self, inc):
+        if inc.name not in self.includes:
+            self.includes[inc.name] = inc
+            return
+
+        prev = self.includes[inc.name]
+        if prev.path.samefile(inc.path):
+            return
+
+        if inc.file and prev.file:
+            err_msg = (
+                "Duplicate include name '{}' but differnt config path"
+                "{} and {} found in {} and {}."
+            ).format(inc.name, inc.path, prev.path, inc.file, prev.file)
+        else:
+            err_msg = (
+                "Duplicate include name '{}' but differnt config path"
+                "{} and {} found."
+            ).format(inc.name, inc.path, prev.path)
+
+        raise ConfigError(err_msg)
+
+    def register_service(self, service):
+        if service.name in self.services:
+            prev = self.services[service.name]
+            if service.file and prev.file:
+                err_msg = "Duplicate service name '{}' found in {} and {}".format(
+                    service.name, service.file, prev.file
+                )
+            else:
+                err_msg = "Duplicate service name '{}' found".format(service.name)
+
+            raise ConfigError(err_msg)
+
+        self.services[service.name] = service
+
+    @classmethod
+    def parse(cls, content, cwd, file=""):
+        parser = cls()
+
+        config = parser.parse_config(content, cwd, file)
 
         unhandled_includes = list(config.includes)
         while unhandled_includes:
             inc = unhandled_includes.pop(0)
 
-            if inc.name in self.includes:
-                prev = self.includes[inc.name]
-                if prev.path.samefile(inc.path):
-                    continue
-
-                raise ConfigError((
-                    "Duplicate include name '{}' but differnt config path"
-                    "{} and {} found in {} and {}"
-                ).format(
-                    inc.name, inc.path, prev.path, inc.file, prev.file,
-                ))
-
-            if str(inc.path) not in self.configs:
+            parser.register_include(inc)
+            if str(inc.path) not in parser.configs:
                 # If inc.path is already in the config list, we won't
                 # parse it (and append includes) again. This allows users
-                # to include the same file multiple times (as long as the
-                # names are different).
+                # to include the same file multiple times with different names.
                 with inc.path.open() as f:
                     content = f.read()
-                    cwd = inc.path.parent.resolve()
-                    file = str(inc.path)
 
-                    config = _parse_config_by_version(content, cwd, file=file)
-                    self.configs[file] = config
-                    unhandled_includes.extend(config.includes)
+                config = parser.parse_config(content, inc.path.parent, str(inc.path))
+                unhandled_includes.extend(config.includes)
 
-            self.includes[inc.name] = inc
-
-        for _parser in chain.from_iterable(parser for parser in self.configs):
-            service = _parser.services
-
+        for service in chain.from_iterable(
+            config.services for config in parser.configs.values()
+        ):
             if not hasattr(service, "name"):
                 continue
+            parser.register_service(service)
 
-            if service.name in self.services:
-                prev = self.services[service.name]
-                raise ConfigError(
-                    "Duplicate service name '{}' found in {} and {}".format(
-                        service.name, service.file, prev.file,
-                    ))
-
-            self.services[service.name] = service
+        return parser
 
     def collect_services(self, parser):
         # The local 'service' variable is the returned value containing
@@ -145,7 +168,8 @@ class Parser:
                 if stack not in self.includes:
                     raise ConfigError(
                         "Cannot find stack with name '{}'".format(stack),
-                        file=service.file)
+                        file=service.file,
+                    )
 
                 inc = self.includes[stack]
                 config = self.configs[str(inc.path)]
@@ -153,26 +177,25 @@ class Parser:
                     continue
                 included_stacks.add(config)
 
-                unhandled_services.extend(
-                    reversed(self.resolve_stack(config)))
+                unhandled_services.extend(reversed(self.resolve_stack(config)))
 
             elif isinstance(service, TemplateServiceItem):
                 template = service.template
                 if template not in self.services:
                     raise ConfigError(
-                        "Cannot find template witth name '{}'".format(
-                            template),
-                        file=service.file)
+                        "Cannot find template witth name '{}'".format(template),
+                        file=service.file,
+                    )
 
-                services.append(self.resolve_template(
-                    self.services[template]))
+                services.append(self.resolve_template(self.services[template]))
 
             elif isinstance(service, ServiceItem):
                 services.append(service)
 
             else:
                 raise RuntimeError(
-                    "Unexpected ServiceItemType '{}'".format(service.item_type))
+                    "Unexpected ServiceItemType '{}'".format(service.item_type)
+                )
 
         return services
 
@@ -195,18 +218,18 @@ class Config:
         self.services = [self._parse_service(item) for item in services]
 
     def _parse_include(self, item):
-        if 'name' not in item:
+        if "name" not in item:
             raise ConfigError(
-                "includes.item should have attribute 'name'",
-                file=self.file)
+                "includes.item should have attribute 'name'", file=self.file
+            )
 
-        if 'path' not in item:
+        if "path" not in item:
             raise ConfigError(
-                "includes.item should have attribute 'path'",
-                file=self.file)
+                "includes.item should have attribute 'path'", file=self.file
+            )
 
-        name = item.get('name')
-        path = self.cwd.joinpath(item.get('path'))
+        name = item.get("name")
+        path = self.cwd.joinpath(item.get("path"))
 
         return IncludeItem(name, path, file=self.file)
 
@@ -221,12 +244,15 @@ class Config:
             if _type.match(item):
                 return _type(item, file=self.file)
 
-        definitions = " or ".join("[{}]".format(_type.match_definition)
-                                  for _type in service_types)
+        definitions = " or ".join(
+            "[{}]".format(_type.match_definition) for _type in service_types
+        )
         raise ConfigError(
             "Service {} doesn't match any service definition {}".format(
-                item, definitions),
-            file=self.file)
+                item, definitions
+            ),
+            file=self.file,
+        )
 
 
 class IncludeItem:
@@ -234,20 +260,20 @@ class IncludeItem:
         self.file = file
 
         if name == "":
-            raise ConfigError(
-                "includes.item.name cannot be an empty string",
-                file=file)
+            raise ConfigError("includes.item.name cannot be an empty string", file=file)
 
         if not path.is_file():
             raise ConfigError(
-                ("includes.item '{}' with path {} "
-                 "should point to a config file").format(name, path),
-                file=file)
+                (
+                    "includes.item '{}' with path {} " "should point to a config file"
+                ).format(name, path),
+                file=file,
+            )
 
         self.name = name
         self.path = path.resolve()
 
-    __repr__ = _get_repr_function(("name", "path"), ("file", ))
+    __repr__ = _get_repr_function(("name", "path"), ("file",))
 
     def __eq__(self, value):
         return self.name == value.name and self.path.samefile(value.path)
@@ -264,19 +290,21 @@ class StackServiceItem:
         stack = item.pop("stack")
         if stack == "":
             raise ConfigError(
-                "If specified, services.item.stack cannot be an empty string",
-                file=file)
+                "If specified, services.item.stack cannot be an empty string", file=file
+            )
 
         if item:
             raise ConfigError(
                 "Unexpected field(s) when specifying stack '{}': {}".format(
-                    stack, ", ".join(item)),
-                file=file)
+                    stack, ", ".join(item)
+                ),
+                file=file,
+            )
 
         self.stack = stack
         self.file = file
 
-    __repr__ = _get_repr_function(("stack", ), ("file", ))
+    __repr__ = _get_repr_function(("stack",), ("file",))
 
     def __eq__(self, value):
         return self.stack == value.stack
@@ -297,8 +325,8 @@ class ServiceItem:
         name = item.pop("name")
         if name == "":
             raise ConfigError(
-                "If specified, services.item.name cannot be an empty string",
-                file=file)
+                "If specified, services.item.name cannot be an empty string", file=file
+            )
 
         self.file = file
         self.name = name
@@ -314,20 +342,24 @@ class ServiceItem:
         if item:
             raise ConfigError(
                 "Unexpected field(s) when specifying service '{}': {}".format(
-                    name, ", ".join(item)),
-                file=file)
+                    name, ", ".join(item)
+                ),
+                file=file,
+            )
 
     __repr__ = _get_repr_function(
-        ("name", ),
-        ("host",
-         "path",
-         "port",
-         "protocol",
-         "method",
-         "handler",
-         "tlskey",
-         "tlscert",
-         "file"),
+        ("name",),
+        (
+            "host",
+            "path",
+            "port",
+            "protocol",
+            "method",
+            "handler",
+            "tlskey",
+            "tlscert",
+            "file",
+        ),
     )
 
     def __eq__(self, value):
@@ -360,22 +392,26 @@ class TemplateServiceItem(ServiceItem):
         if template == "":
             raise ConfigError(
                 "If specified, services.item.template cannot be an empty string",
-                file=file)
+                file=file,
+            )
 
         super().__init__(item, file=file)
         self.template = template
 
     __repr__ = _get_repr_function(
         ("name", "template"),
-        ("host",
-         "path",
-         "port",
-         "protocol",
-         "method",
-         "handler",
-         "tlskey",
-         "tlscert",
-         "file"))
+        (
+            "host",
+            "path",
+            "port",
+            "protocol",
+            "method",
+            "handler",
+            "tlskey",
+            "tlscert",
+            "file",
+        ),
+    )
 
     def __eq__(self, value):
         return self.template == value.template and super().__eq__(value)
@@ -387,7 +423,7 @@ class TemplateServiceItem(ServiceItem):
 
 def _load_obj(data):
     yaml = YAML()
-    return yaml.load(data)
+    return yaml.load(data) or {}
 
 
 def _parse_config_by_version(data, cwd, file=""):
@@ -395,16 +431,12 @@ def _parse_config_by_version(data, cwd, file=""):
 
     version = obj.get("version", CURRENT_VERSION)
     if not isinstance(version, int):
-        raise ConfigError(
-            "Invalid version {}".format(version),
-            file=file)
+        raise ConfigError("Invalid version {}".format(version), file=file)
 
     if version == 0:
         config_cls = Config
     else:
-        raise ConfigError(
-            "Version {} is not supported".format(version),
-            file=file)
+        raise ConfigError("Version {} is not supported".format(version), file=file)
 
     if file != "":
         config = config_cls(obj, cwd, file=file)
@@ -418,8 +450,7 @@ class ConfigError(Exception):
     def __init__(self, reason, **meta):
         self.meta = meta
 
-        items = tuple("{}={!r}".format(k, v)
-                      for k, v in meta.items() if bool(v))
+        items = tuple("{}={!r}".format(k, v) for k, v in meta.items() if bool(v))
         if items:
             reason = "{}, ({})".format(reason, ", ".join(items))
 

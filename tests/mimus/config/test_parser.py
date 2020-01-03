@@ -4,6 +4,7 @@ from types import SimpleNamespace as Case
 import pytest
 
 from mimus.config.parser import (
+    Parser,
     Config,
     IncludeItem,
     StackServiceItem,
@@ -13,62 +14,203 @@ from mimus.config.parser import (
 )
 
 
-class Test_Config:
+class Test_Parser:
+    def test_parse_config(self, datadir):
+        """
+        Test if Parser.parse_config inserts a new config into
+        Parser.configs with resolved file path as key.
+        """
+        file_path = datadir / "empty.yml"
+        resovled_path = str(file_path.resolve())
 
+        parser = Parser()
+        config = parser.parse_config("", datadir, str(file_path))
+
+        assert len(parser.configs) == 1
+        assert parser.configs[resovled_path] is config
+        assert config.file == resovled_path
+        assert config.cwd == datadir.resolve()
+        assert len(config.includes) == 0
+        assert len(config.services) == 0
+
+    def test_parse_included_config(self, datadir):
+        """
+        Test if Parser.parse_config will not insert a new config into
+        Parser.configs if the file path already exists.
+        """
+        file_path = datadir / "empty.yml"
+        resovled_path = str(file_path.resolve())
+
+        parser = Parser()
+        parser.configs[resovled_path] = Config(
+            {}, datadir.resolve(), file=resovled_path
+        )
+        config = parser.parse_config("", datadir, str(file_path))
+
+        assert len(parser.configs) == 1
+        assert parser.configs[resovled_path] is config
+        assert config.file == resovled_path
+        assert config.cwd == datadir.resolve()
+        assert len(config.includes) == 0
+        assert len(config.services) == 0
+
+    def test_parse(self, datadir):
+        """
+        Test Parser.parse works as expected.
+        """
+        file_path = datadir / "test_parse_root.yml"
+        root_path = str(file_path.resolve())
+        include_path = str((datadir / "test_parse_include.yml").resolve())
+
+        with open(file_path) as f:
+            data = f.read()
+        parser = Parser.parse(data, datadir, str(file_path))
+
+        assert len(parser.configs) == 2
+
+        root_config = parser.configs[root_path]
+        assert root_config.file == root_path
+        assert root_config.cwd == datadir
+        assert root_config.includes == [
+            IncludeItem("test_parse_include", datadir / "test_parse_include.yml")
+        ]
+        assert root_config.services == [
+            ServiceItem(dict(name="name")),
+            StackServiceItem(dict(stack="test_parse_include")),
+        ]
+        include_config = parser.configs[include_path]
+        assert include_config.file == include_path
+        assert include_config.cwd == datadir
+        assert len(include_config.includes) == 0
+        assert len(include_config.services) == 0
+
+        assert len(parser.services) == 1
+        assert parser.services["name"] == ServiceItem(dict(name="name"))
+        assert len(parser.includes) == 1
+        assert parser.includes["test_parse_include"] == IncludeItem(
+            "test_parse_include", datadir / "test_parse_include.yml"
+        )
+
+    def test_register_include(self, datadir):
+        """
+        Test if Parser.register_include works as expected.
+        """
+
+        file_path = datadir / "empty.yml"
+        file_path.touch()
+
+        cases = [
+            Case(includes=[IncludeItem("name", file_path)]),
+            Case(
+                includes=[
+                    IncludeItem("name", file_path.resolve()),
+                    IncludeItem("name", file_path),
+                ],
+            ),
+        ]
+
+        for case in cases:
+            parser = Parser()
+            for inc in case.includes:
+                parser.register_include(inc)
+
+            assert len(parser.includes) == 1
+            assert parser.includes["name"] == IncludeItem("name", file_path)
+
+    def test_register_duplicate_include(self, datadir):
+        """
+        Test if Parser.register_include raises exception when
+        a include with the same name but different path already exists.
+        """
+
+        file_path = datadir / "empty.yml"
+        file_path2 = datadir / "empty2.yml"
+        file_path.touch()
+        file_path2.touch()
+
+        parser = Parser()
+        parser.includes["name"] = IncludeItem("name", file_path)
+
+        with pytest.raises(ConfigError) as excinfo:
+            parser.register_include(IncludeItem("name", file_path2))
+
+        assert "Duplicate include name 'name' but differnt config path" in str(
+            excinfo.value
+        )
+
+    def test_register_service(self):
+        """
+        Test if Parser.register_service works as expected.
+        """
+
+        parser = Parser()
+        service = ServiceItem(dict(name="name", path="path",), file="file")
+        parser.register_service(service)
+
+        assert len(parser.services) == 1
+        assert parser.services["name"] == service
+
+    def test_register_duplicate_service(self):
+        """
+        Test if Parser.register_service raises exception when
+        a service with the same name already exists.
+        """
+
+        parser = Parser()
+        service = ServiceItem(dict(name="name", path="path",), file="file")
+        parser.services["name"] = TemplateServiceItem(
+            dict(name="name", template="template",), file="file"
+        )
+        with pytest.raises(ConfigError) as excinfo:
+            parser.register_service(service)
+
+        assert (
+            str(excinfo.value) == "Duplicate service name 'name' found in file and file"
+        )
+
+
+class Test_Config:
     def test_init(self, datadir):
         """
         Test if Config.__init__ works as expected.
         """
+
+        file_path = datadir / "empty.yml"
+        file_path.touch()
+
         obj = {
-            "includes": [{
-                "name": "include_1",
-                "path": str(datadir / "empty.yml"),
-            }],
-            "services": [{
-                "stack": "stack",
-            }, {
-                "name": "name",
-                "host": "host",
-            }],
+            "includes": [{"name": "include_1", "path": str(file_path),}],
+            "services": [{"stack": "stack",}, {"name": "name", "host": "host",}],
         }
 
         config = Config(obj, datadir)
 
         assert len(config.includes) == 1
-        assert config.includes[0] == IncludeItem(
-            "include_1", datadir / "empty.yml")
+        assert config.includes[0] == IncludeItem("include_1", file_path)
 
         assert len(config.services) == 2
         assert config.services[0] == StackServiceItem(dict(stack="stack"))
-        assert config.services[1] == ServiceItem(
-            dict(name="name", host="host"))
+        assert config.services[1] == ServiceItem(dict(name="name", host="host"))
 
     def test_init_exception(self, datadir):
         """
         Test if Config.__init__ raises exception on malformed inputs.
         """
 
+        file_path = datadir / "empty.yml"
+        file_path.touch()
+
         cases = [
             Case(
-                args=({
-                    "includes": [{
-                        "name": "include_1",
-                    }],
-                }, datadir),
+                args=({"includes": [{"name": "include_1",}],}, datadir),
                 exception="includes.item should have attribute 'name'",
             ),
             Case(
-                args=({
-                    "includes": [{
-                        "path": str(datadir / "empty.yml"),
-                    }],
-                }, datadir),
+                args=({"includes": [{"path": str(file_path),}],}, datadir),
                 exception="includes.item should have attribute 'path'",
             ),
             Case(
-                args=({
-                    "services": [{}],
-                }, datadir),
+                args=({"services": [{}],}, datadir),
                 exception="idoesn't match any service definition",
             ),
         ]
@@ -146,20 +288,19 @@ class Test_StackServiceItem:
 
         cases = [
             Case(
-                args=(dict(stack="stack"), ),
+                args=(dict(stack="stack"),),
                 kwargs={},
                 output="StackServiceItem(stack='stack')",
             ),
             Case(
-                args=(dict(stack="stack"), ),
+                args=(dict(stack="stack"),),
                 kwargs=dict(file="file"),
                 output="StackServiceItem(stack='stack', file='file')",
             ),
         ]
 
         for case in cases:
-            assert repr(StackServiceItem(
-                *case.args, **case.kwargs)) == case.output
+            assert repr(StackServiceItem(*case.args, **case.kwargs)) == case.output
 
     def test_unexpected_field(self):
         """
@@ -171,7 +312,8 @@ class Test_StackServiceItem:
             StackServiceItem(dict(stack="stack", unexpected="unexpected"))
 
         assert "Unexpected field(s) when specifying stack 'stack': unexpected" in str(
-            excinfo.value)
+            excinfo.value
+        )
 
     def test_empty_satck(self):
         """
@@ -180,12 +322,11 @@ class Test_StackServiceItem:
         """
 
         with pytest.raises(ConfigError) as excinfo:
-            StackServiceItem(dict(
-                stack="",
-            ))
+            StackServiceItem(dict(stack="",))
 
         assert "If specified, services.item.stack cannot be an empty string" in str(
-            excinfo.value)
+            excinfo.value
+        )
 
     def test_match(self):
         """
@@ -193,18 +334,9 @@ class Test_StackServiceItem:
         """
 
         cases = [
-            Case(
-                input=dict(stack="stack"),
-                output=True,
-            ),
-            Case(
-                input=dict(stack="stack", other="other"),
-                output=True,
-            ),
-            Case(
-                input=dict(nostack="nostack"),
-                output=False,
-            ),
+            Case(input=dict(stack="stack"), output=True,),
+            Case(input=dict(stack="stack", other="other"), output=True,),
+            Case(input=dict(nostack="nostack"), output=False,),
         ]
 
         for case in cases:
@@ -219,20 +351,19 @@ class Test_TemplateServiceItem:
 
         cases = [
             Case(
-                args=(dict(name="name", template="template"), ),
+                args=(dict(name="name", template="template"),),
                 kwargs={},
                 output="TemplateServiceItem(name='name', template='template')",
             ),
             Case(
-                args=(dict(name="name", template="template"), ),
+                args=(dict(name="name", template="template"),),
                 kwargs=dict(file="file"),
                 output="TemplateServiceItem(name='name', template='template', file='file')",
             ),
         ]
 
         for case in cases:
-            assert repr(TemplateServiceItem(
-                *case.args, **case.kwargs)) == case.output
+            assert repr(TemplateServiceItem(*case.args, **case.kwargs)) == case.output
 
     def test_unexpected_field(self):
         """
@@ -241,14 +372,13 @@ class Test_TemplateServiceItem:
         """
 
         with pytest.raises(ConfigError) as excinfo:
-            TemplateServiceItem(dict(
-                name="name",
-                template="template",
-                unexpected="unexpected",
-            ))
+            TemplateServiceItem(
+                dict(name="name", template="template", unexpected="unexpected",)
+            )
 
         assert "Unexpected field(s) when specifying service 'name': unexpected" in str(
-            excinfo.value)
+            excinfo.value
+        )
 
     def test_empty_template(self):
         """
@@ -257,13 +387,11 @@ class Test_TemplateServiceItem:
         """
 
         with pytest.raises(ConfigError) as excinfo:
-            TemplateServiceItem(dict(
-                name="name",
-                template="",
-            ))
+            TemplateServiceItem(dict(name="name", template="",))
 
         assert "If specified, services.item.template cannot be an empty string" in str(
-            excinfo.value)
+            excinfo.value
+        )
 
     def test_match(self):
         """
@@ -271,18 +399,9 @@ class Test_TemplateServiceItem:
         """
 
         cases = [
-            Case(
-                input=dict(name="name", template="template"),
-                output=True,
-            ),
-            Case(
-                input=dict(name="name"),
-                output=False,
-            ),
-            Case(
-                input=dict(template="template"),
-                output=False,
-            ),
+            Case(input=dict(name="name", template="template"), output=True,),
+            Case(input=dict(name="name"), output=False,),
+            Case(input=dict(template="template"), output=False,),
         ]
 
         for case in cases:
@@ -294,17 +413,20 @@ class Test_ServiceItem:
         """
         Test if ServiceItem.__init__ works as expected.
         """
-        service = ServiceItem(dict(
-            name="name",
-            host="host",
-            path="path",
-            port=80,
-            protocol="protocol",
-            method="method",
-            handler="handler",
-            tlskey="tlskey",
-            tlscert="tlscert",
-        ), file="file")
+        service = ServiceItem(
+            dict(
+                name="name",
+                host="host",
+                path="path",
+                port=80,
+                protocol="protocol",
+                method="method",
+                handler="handler",
+                tlskey="tlskey",
+                tlscert="tlscert",
+            ),
+            file="file",
+        )
 
         assert service.name == "name"
         assert service.host == "host"
@@ -323,20 +445,17 @@ class Test_ServiceItem:
 
         cases = [
             Case(
-                args=(dict(name="name"), ),
-                kwargs={},
-                output="ServiceItem(name='name')",
+                args=(dict(name="name"),), kwargs={}, output="ServiceItem(name='name')",
             ),
             Case(
-                args=(dict(name="name"), ),
+                args=(dict(name="name"),),
                 kwargs=dict(file="file"),
                 output="ServiceItem(name='name', file='file')",
             ),
         ]
 
         for case in cases:
-            assert repr(ServiceItem(
-                *case.args, **case.kwargs)) == case.output
+            assert repr(ServiceItem(*case.args, **case.kwargs)) == case.output
 
     def test_unexpected_field(self):
         """
@@ -345,13 +464,11 @@ class Test_ServiceItem:
         """
 
         with pytest.raises(ConfigError) as excinfo:
-            ServiceItem(dict(
-                name="name",
-                unexpected="unexpected",
-            ))
+            ServiceItem(dict(name="name", unexpected="unexpected",))
 
         assert "Unexpected field(s) when specifying service 'name': unexpected" in str(
-            excinfo.value)
+            excinfo.value
+        )
 
     def test_empty_name(self):
         """
@@ -363,7 +480,8 @@ class Test_ServiceItem:
             ServiceItem(dict(name=""))
 
         assert "If specified, services.item.name cannot be an empty string" in str(
-            excinfo.value)
+            excinfo.value
+        )
 
     def test_match(self):
         """
@@ -371,14 +489,8 @@ class Test_ServiceItem:
         """
 
         cases = [
-            Case(
-                input=dict(name="name"),
-                output=True,
-            ),
-            Case(
-                input=dict(template="template"),
-                output=False,
-            ),
+            Case(input=dict(name="name"), output=True,),
+            Case(input=dict(template="template"), output=False,),
         ]
 
         for case in cases:
