@@ -4,7 +4,7 @@ from types import SimpleNamespace as Case
 import pytest
 
 from mimus.config.parser import (
-    Parser,
+    Config,
     IncludeItem,
     StackServiceItem,
     TemplateServiceItem,
@@ -13,11 +13,11 @@ from mimus.config.parser import (
 )
 
 
-class Test_Parser:
+class Test_Config:
 
     def test_init(self, datadir):
         """
-        Test if Parser.__init__ works as expected.
+        Test if Config.__init__ works as expected.
         """
         obj = {
             "includes": [{
@@ -32,20 +32,20 @@ class Test_Parser:
             }],
         }
 
-        parser = Parser(obj, datadir)
+        config = Config(obj, datadir)
 
-        assert len(parser.includes) == 1
-        assert parser.includes[0] == IncludeItem(
+        assert len(config.includes) == 1
+        assert config.includes[0] == IncludeItem(
             "include_1", datadir / "empty.yml")
 
-        assert len(parser.services) == 2
-        assert parser.services[0] == StackServiceItem(dict(stack="stack"))
-        assert parser.services[1] == ServiceItem(
+        assert len(config.services) == 2
+        assert config.services[0] == StackServiceItem(dict(stack="stack"))
+        assert config.services[1] == ServiceItem(
             dict(name="name", host="host"))
 
     def test_init_exception(self, datadir):
         """
-        Test if Parser.__init__ raises exception on malformed inputs.
+        Test if Config.__init__ raises exception on malformed inputs.
         """
 
         cases = [
@@ -75,7 +75,7 @@ class Test_Parser:
 
         for case in cases:
             with pytest.raises(ConfigError) as excinfo:
-                Parser(*case.args)
+                Config(*case.args)
 
                 assert case.exception in str(excinfo.value)
 

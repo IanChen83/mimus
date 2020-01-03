@@ -12,8 +12,8 @@ __all__ = (
     'SUPPORTED_PARSERS',
     'load',
     'loads',
+    'Config',
     'Parser',
-    'State',
     'StackServiceItem',
     'TemplateServiceItem',
     'ServiceItem',
@@ -68,26 +68,22 @@ def loads(data, *, file=""):
             raise ConfigError("'file' should be a valid file path")
         cwd = file_path.parent
 
-    state = State()
-    state.parse(data, cwd)
+    parser = Parser()
+    parser.parse(data, cwd)
 
 
-class State:
+class Parser:
     def __init__(self):
         self.services = {}
         self.includes = {}
-        self.parsers = {}
+        self.configs = {}
 
     def parse(self, content, cwd, file=""):
         cwd = cwd.resolve()
-        parser = _create_parser(content, cwd, file=file)
-        self.parsers[file] = parser
+        config = _parse_config_by_version(content, cwd, file=file)
+        self.configs[file] = config
 
-        self._init(parser)
-
-    def _init(self, parser):
-        unhandled_includes = list(parser.includes)
-
+        unhandled_includes = list(config.includes)
         while unhandled_includes:
             inc = unhandled_includes.pop(0)
 
@@ -103,8 +99,8 @@ class State:
                     inc.name, inc.path, prev.path, inc.file, prev.file,
                 ))
 
-            if str(inc.path) not in self.parsers:
-                # If inc.path is already in the parser list, we won't
+            if str(inc.path) not in self.configs:
+                # If inc.path is already in the config list, we won't
                 # parse it (and append includes) again. This allows users
                 # to include the same file multiple times (as long as the
                 # names are different).
@@ -113,13 +109,13 @@ class State:
                     cwd = inc.path.parent.resolve()
                     file = str(inc.path)
 
-                    parser = _create_parser(content, cwd, file=file)
-                    self.parsers[file] = parser
-                    unhandled_includes.extend(parser.includes)
+                    config = _parse_config_by_version(content, cwd, file=file)
+                    self.configs[file] = config
+                    unhandled_includes.extend(config.includes)
 
             self.includes[inc.name] = inc
 
-        for _parser in chain.from_iterable(parser for parser in self.parsers):
+        for _parser in chain.from_iterable(parser for parser in self.configs):
             service = _parser.services
 
             if not hasattr(service, "name"):
@@ -136,7 +132,7 @@ class State:
 
     def collect_services(self, parser):
         # The local 'service' variable is the returned value containing
-        # ordered services, while State.services is a mapping from service
+        # ordered services, while Parser.services is a mapping from service
         # names to service definitions.
         services = []
         unhandled_services = list(reversed(parser.services))
@@ -152,13 +148,13 @@ class State:
                         file=service.file)
 
                 inc = self.includes[stack]
-                parser = self.parsers[str(inc.path)]
-                if parser in included_stacks:
+                config = self.configs[str(inc.path)]
+                if config in included_stacks:
                     continue
-                included_stacks.add(parser)
+                included_stacks.add(config)
 
                 unhandled_services.extend(
-                    reversed(self.resolve_stack(parser)))
+                    reversed(self.resolve_stack(config)))
 
             elif isinstance(service, TemplateServiceItem):
                 template = service.template
@@ -187,7 +183,7 @@ class State:
         pass
 
 
-class Parser:
+class Config:
     def __init__(self, obj, cwd, *, file=""):
         self.file = file
 
@@ -394,7 +390,7 @@ def _load_obj(data):
     return yaml.load(data)
 
 
-def _create_parser(data, cwd, file=""):
+def _parse_config_by_version(data, cwd, file=""):
     obj = _load_obj(data)
 
     version = obj.get("version", CURRENT_VERSION)
@@ -404,18 +400,18 @@ def _create_parser(data, cwd, file=""):
             file=file)
 
     if version == 0:
-        parser_cls = Parser
+        config_cls = Config
     else:
         raise ConfigError(
             "Version {} is not supported".format(version),
             file=file)
 
     if file != "":
-        parser = parser_cls(obj, cwd, file=file)
+        config = config_cls(obj, cwd, file=file)
     else:
-        parser = parser_cls(obj, cwd)
+        config = config_cls(obj, cwd)
 
-    return parser
+    return config
 
 
 class ConfigError(Exception):
