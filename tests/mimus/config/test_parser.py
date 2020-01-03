@@ -20,7 +20,7 @@ class Test_Parser:
         Test if Parser.parse_config inserts a new config into
         Parser.configs with resolved file path as key.
         """
-        file_path = datadir / "empty.yml"
+        file_path = datadir / "test_parse_root.yml"
         resovled_path = str(file_path.resolve())
 
         parser = Parser()
@@ -38,7 +38,7 @@ class Test_Parser:
         Test if Parser.parse_config will not insert a new config into
         Parser.configs if the file path already exists.
         """
-        file_path = datadir / "empty.yml"
+        file_path = datadir / "test_parse_root.yml"
         resovled_path = str(file_path.resolve())
 
         parser = Parser()
@@ -62,7 +62,7 @@ class Test_Parser:
         root_path = str(file_path.resolve())
         include_path = str((datadir / "test_parse_include.yml").resolve())
 
-        with open(file_path) as f:
+        with open(str(file_path)) as f:
             data = f.read()
         parser = Parser.parse(data, datadir, str(file_path))
 
@@ -96,7 +96,7 @@ class Test_Parser:
         Test if Parser.register_include works as expected.
         """
 
-        file_path = datadir / "empty.yml"
+        file_path = datadir / "test_parse_root.yml"
         file_path.touch()
 
         cases = [
@@ -175,7 +175,7 @@ class Test_Config:
         Test if Config.__init__ works as expected.
         """
 
-        file_path = datadir / "empty.yml"
+        file_path = datadir / "test_parse_root.yml"
         file_path.touch()
 
         obj = {
@@ -197,7 +197,7 @@ class Test_Config:
         Test if Config.__init__ raises exception on malformed inputs.
         """
 
-        file_path = datadir / "empty.yml"
+        file_path = datadir / "test_parse_root.yml"
         file_path.touch()
 
         cases = [
