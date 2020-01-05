@@ -379,7 +379,9 @@ class ServiceItem:
         )
 
     def copy(self):
-        new_obj = self.__class__(dict(name=self.name), file=self.file)
+        new_obj = ServiceItem(
+            dict(name=self.name), file=self.file, inherits=self.inherits
+        )
         new_obj.host = self.host
         new_obj.path = self.path
         new_obj.port = self.port
@@ -456,8 +458,19 @@ class TemplateServiceItem(ServiceItem):
         return "template" in item and super().match(item)
 
     def copy(self):
-        new_obj = super().copy()
-        new_obj.template = self.template
+        new_obj = TemplateServiceItem(
+            dict(name=self.name, template=self.template),
+            file=self.file,
+            inherits=self.inherits,
+        )
+        new_obj.host = self.host
+        new_obj.path = self.path
+        new_obj.port = self.port
+        new_obj.protocol = self.protocol
+        new_obj.method = self.method
+        new_obj.handler = self.handler
+        new_obj.tlskey = self.tlskey
+        new_obj.tlscert = self.tlscert
         return new_obj
 
 

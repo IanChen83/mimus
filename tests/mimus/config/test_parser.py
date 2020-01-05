@@ -169,51 +169,97 @@ class Test_Parser:
             "test_parse_include", datadir / "test_parse_include.yml"
         )
 
+    def test_iter_service(self, datadir):
+        file_path = datadir / "test_parse_root.yml"
+        resolved_path = str(file_path.resolve())
+
+        parser = Parser.parse("", datadir, "")
+        parser.includes["include"] = IncludeItem("include", file_path)
+        parser.configs[resolved_path] = Config({}, datadir)
+        parser.configs[resolved_path].services = [
+            ServiceItem(dict(name="include_service")),
+        ]
+        parser.services["prototype2"] = ServiceItem(
+            dict(
+                name="prototype2",
+                host="prototype2_host",
+                path="prototype2_path",
+                port=80,
+                protocol="prototype2_protocol",
+                method="prototype2_method",
+                handler="prototype2_handler",
+                tlskey="prototype2_tlskey",
+                tlscert="prototype2_tlscert",
+            )
+        )
+        parser.services["prototype1"] = TemplateServiceItem(
+            dict(name="prototype1", template="prototype2", host="prototype1_host"),
+        )
+        parser.root = Config({}, datadir)
+        parser.root.services = [
+            TemplateServiceItem(
+                dict(name="template", template="prototype1", path="template_path")
+            ),
+            StackServiceItem(dict(stack="include")),
+        ]
+        assert list(parser.iter_service()) == [
+            ServiceItem(
+                dict(
+                    name="template",
+                    host="prototype1_host",
+                    path="template_path",
+                    port=80,
+                    protocol="prototype2_protocol",
+                    method="prototype2_method",
+                    handler="prototype2_handler",
+                    tlskey="prototype2_tlskey",
+                    tlscert="prototype2_tlscert",
+                )
+            ),
+            ServiceItem(dict(name="include_service")),
+        ]
+
     def test_resolve_template(self, datadir):
         """
         Test if Parser.resolve_template works as expected.
         """
         file_path = datadir / "test_parse_root.yml"
-        data = """
-services:
-    - name: prototype
-      host: prototype_host
-      path: prototype_path
-      port: 80
-      protocol: prototype_protocol
-      method: prototype_method
-      handler: prototype_handler
-      tlskey: prototype_tlskey
-      tlscert: prototype_tlscert
-"""
 
-        parser = Parser.parse(data, datadir, str(file_path))
+        parser = Parser.parse("", datadir, "")
+        parser.services["prototype"] = ServiceItem(
+            dict(
+                name="prototype",
+                host="prototype_host",
+                path="prototype_path",
+                port=80,
+                protocol="prototype_protocol",
+                method="prototype_method",
+                handler="prototype_handler",
+                tlskey="prototype_tlskey",
+                tlscert="prototype_tlscert",
+            )
+        )
 
-        cases = [
-            Case(
-                template=TemplateServiceItem(
-                    dict(name="template", template="prototype", host="host")
-                ),
-                result=ServiceItem(
-                    dict(
-                        name="template",
-                        host="host",
-                        path="prototype_path",
-                        port=80,
-                        protocol="prototype_protocol",
-                        method="prototype_method",
-                        handler="prototype_handler",
-                        tlskey="prototype_tlskey",
-                        tlscert="prototype_tlscert",
-                    )
-                ),
-            ),
-        ]
+        template = TemplateServiceItem(
+            dict(name="template", template="prototype", host="host")
+        )
+        expected = ServiceItem(
+            dict(
+                name="template",
+                host="host",
+                path="prototype_path",
+                port=80,
+                protocol="prototype_protocol",
+                method="prototype_method",
+                handler="prototype_handler",
+                tlskey="prototype_tlskey",
+                tlscert="prototype_tlscert",
+            )
+        )
 
-        for case in cases:
-            result = parser.resolve_template(case.template)
-            assert result == case.result
-            assert result.inherits[0] == "template:prototype"
+        result = parser.resolve_template(template)
+        assert result == expected
+        assert result.inherits[0] == "template:prototype"
 
     def test_resolve_unknown_template(self, datadir):
         """
@@ -232,14 +278,16 @@ services:
 
     def test_resolve_stack(self, datadir):
         file_path = datadir / "test_parse_root.yml"
-        data = """
-includes:
-    - name: "test_parse_root"
-      path: {}
-"""
-        data = data.format(str(file_path.resolve()))
+        resolved_path = str(file_path.resolve())
 
-        parser = Parser.parse(data, datadir, "")
+        parser = Parser.parse("", datadir, "")
+        parser.includes["test_parse_root"] = IncludeItem("test_parse_root", file_path)
+        parser.configs[resolved_path] = Config({}, datadir)
+        parser.configs[resolved_path].services = [
+            ServiceItem(dict(name="name")),
+            StackServiceItem(dict(stack="test_parse_include")),
+        ]
+
         results = parser.resolve_stack(StackServiceItem(dict(stack="test_parse_root")))
         assert results == [
             ServiceItem(dict(name="name")),
@@ -247,6 +295,15 @@ includes:
         ]
         assert results[0].inherits[0] == "stack:test_parse_root"
         assert results[1].inherits[0] == "stack:test_parse_root"
+
+    def test_resolve_unknown_stack(self, datadir):
+        file_path = datadir / "test_parse_root.yml"
+        parser = Parser.parse("", datadir, "")
+
+        with pytest.raises(ConfigError) as excinfo:
+            parser.resolve_stack(StackServiceItem(dict(stack="unknown")))
+
+        assert "Cannot find stack with name 'unknown'" in str(excinfo.value)
 
 
 class Test_Config:
