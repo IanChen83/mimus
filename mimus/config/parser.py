@@ -25,18 +25,6 @@ CURRENT_VERSION = 0
 SUPPORTED_PARSERS = (0,)
 
 
-"""
-1. construct parser inclusion graph
-1. get version from object
-2. get parser based on version
-3. return services with metadata for debugging
-
-for the current parser
-1. parse includes
-2. return services
-"""
-
-
 def _get_repr_function(keys, optional_keys=tuple()):
     def fn(self):
         items = list("{}={!r}".format(k, self.__dict__[k]) for k in keys)
@@ -73,6 +61,7 @@ def loads(data, *, file=""):
 
 class Parser:
     def __init__(self):
+        self.root = None
         self.services = {}
         self.includes = {}
         self.configs = {}
@@ -128,6 +117,7 @@ class Parser:
         parser = cls()
 
         config = parser.parse_config(content, cwd, file)
+        parser.root = config
 
         unhandled_includes = list(config.includes)
         while unhandled_includes:
@@ -153,57 +143,65 @@ class Parser:
 
         return parser
 
-    def collect_services(self, parser):
-        # The local 'service' variable is the returned value containing
-        # ordered services, while Parser.services is a mapping from service
-        # names to service definitions.
-        services = []
-        unhandled_services = list(reversed(parser.services))
+    def iter_service(self):
+        if self.root is None:
+            return
+
+        unhandled_services = list(reversed(self.root.services))
 
         included_stacks = set()
         while unhandled_services:
             service = unhandled_services.pop()
             if isinstance(service, StackServiceItem):
-                stack = service.stack
-                if stack not in self.includes:
-                    raise ConfigError(
-                        "Cannot find stack with name '{}'".format(stack),
-                        file=service.file,
-                    )
-
-                inc = self.includes[stack]
-                config = self.configs[str(inc.path)]
-                if config in included_stacks:
+                if service.stack in included_stacks:
                     continue
-                included_stacks.add(config)
 
-                unhandled_services.extend(reversed(self.resolve_stack(config)))
+                unhandled_services.extend(reversed(self.resolve_stack(service)))
+                included_stacks.add(service.stack)
 
             elif isinstance(service, TemplateServiceItem):
-                template = service.template
-                if template not in self.services:
-                    raise ConfigError(
-                        "Cannot find template witth name '{}'".format(template),
-                        file=service.file,
-                    )
-
-                services.append(self.resolve_template(self.services[template]))
+                unhandled_services.append(self.resolve_template(service))
 
             elif isinstance(service, ServiceItem):
-                services.append(service)
+                yield service
 
             else:
                 raise RuntimeError(
                     "Unexpected ServiceItemType '{}'".format(service.item_type)
                 )
 
-        return services
+    def resolve_template(self, obj):
+        if obj.template not in self.services:
+            raise ConfigError(
+                "Cannot find template '{}' for service '{}'".format(
+                    obj.template, obj.name,
+                ),
+                file=obj.file,
+            )
+        template = self.services[obj.template]
+        new_obj = template.copy()
+        new_obj.name = obj.name
+        new_obj.set_attrs_from(obj)
 
-    def resolve_template(self, template):
-        pass
+        new_obj.file = obj.file
+        new_obj.inherits = ("template:" + template.name, *template.inherits)
 
-    def resolve_stack(self, stack):
-        pass
+        return new_obj
+
+    def resolve_stack(self, obj):
+        if obj.stack not in self.includes:
+            raise ConfigError(
+                "Cannot find stack with name '{}'".format(obj.stack), file=obj.file,
+            )
+
+        stack_path = self.includes[obj.stack].path
+        config = self.configs[str(stack_path)]
+        results = config.services.copy()
+
+        for service in results:
+            service.inherits = ("stack:" + obj.stack, *service.inherits)
+
+        return results
 
 
 class Config:
@@ -285,7 +283,7 @@ class StackServiceItem:
 
     match_definition = "Item contains 'stack' field"
 
-    def __init__(self, item: dict, *, file=""):
+    def __init__(self, item: dict, *, file="", inherits=tuple()):
         item = item.copy()
         stack = item.pop("stack")
         if stack == "":
@@ -302,9 +300,11 @@ class StackServiceItem:
             )
 
         self.stack = stack
-        self.file = file
 
-    __repr__ = _get_repr_function(("stack",), ("file",))
+        self.file = file
+        self.inherits = inherits
+
+    __repr__ = _get_repr_function(("stack",), ("file", "inherits"))
 
     def __eq__(self, value):
         return self.stack == value.stack
@@ -320,7 +320,7 @@ class ServiceItem:
 
     match_definition = "Item contains 'name' field"
 
-    def __init__(self, item: dict, *, file=""):
+    def __init__(self, item: dict, *, file="", inherits=tuple()):
         item = item.copy()
         name = item.pop("name")
         if name == "":
@@ -328,7 +328,6 @@ class ServiceItem:
                 "If specified, services.item.name cannot be an empty string", file=file
             )
 
-        self.file = file
         self.name = name
         self.host = item.pop("host", "")
         self.path = item.pop("path", "")
@@ -338,6 +337,9 @@ class ServiceItem:
         self.handler = item.pop("handler", "")
         self.tlskey = item.pop("tlskey", "")
         self.tlscert = item.pop("tlscert", "")
+
+        self.inherits = inherits
+        self.file = file
 
         if item:
             raise ConfigError(
@@ -359,6 +361,7 @@ class ServiceItem:
             "tlskey",
             "tlscert",
             "file",
+            "inherits",
         ),
     )
 
@@ -375,6 +378,37 @@ class ServiceItem:
             and self.tlscert == value.tlscert
         )
 
+    def copy(self):
+        new_obj = self.__class__(dict(name=self.name), file=self.file)
+        new_obj.host = self.host
+        new_obj.path = self.path
+        new_obj.port = self.port
+        new_obj.protocol = self.protocol
+        new_obj.method = self.method
+        new_obj.handler = self.handler
+        new_obj.tlskey = self.tlskey
+        new_obj.tlscert = self.tlscert
+
+        return new_obj
+
+    def set_attrs_from(self, obj):
+        if obj.host:
+            self.host = obj.host
+        if obj.path:
+            self.path = obj.path
+        if obj.port:
+            self.port = obj.port
+        if obj.protocol:
+            self.protocol = obj.protocol
+        if obj.method:
+            self.method = obj.method
+        if obj.handler:
+            self.handler = obj.handler
+        if obj.tlskey:
+            self.tlskey = obj.tlskey
+        if obj.tlscert:
+            self.tlscert = obj.tlscert
+
     @classmethod
     def match(cls, item):
         return "name" in item
@@ -386,7 +420,7 @@ class TemplateServiceItem(ServiceItem):
 
     match_definition = "Item contains 'template' field and Item matches a service"
 
-    def __init__(self, item, *, file=""):
+    def __init__(self, item, *, file="", inherits=tuple()):
         item = item.copy()
         template = item.pop("template")
         if template == "":
@@ -395,7 +429,7 @@ class TemplateServiceItem(ServiceItem):
                 file=file,
             )
 
-        super().__init__(item, file=file)
+        super().__init__(item, file=file, inherits=inherits)
         self.template = template
 
     __repr__ = _get_repr_function(
@@ -410,6 +444,7 @@ class TemplateServiceItem(ServiceItem):
             "tlskey",
             "tlscert",
             "file",
+            "inherits",
         ),
     )
 
@@ -419,6 +454,11 @@ class TemplateServiceItem(ServiceItem):
     @classmethod
     def match(cls, item):
         return "template" in item and super().match(item)
+
+    def copy(self):
+        new_obj = super().copy()
+        new_obj.template = self.template
+        return new_obj
 
 
 def _load_obj(data):
