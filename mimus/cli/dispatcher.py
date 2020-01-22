@@ -1,7 +1,7 @@
 import sys
 from inspect import getdoc, isclass
 
-from docopt import docopt, DocoptLanguageError, DocoptExit
+from docopt import docopt, DocoptExit
 
 from .error import CommandError, CommandNotFoundError, ArgumentError
 
@@ -51,7 +51,7 @@ class Dispatcher:
         # If we are in delegate_mode, and docopt catches the command, we delegate
         # the arguements to the sub-command.
         if delegate_mode and options.get(self._posarg_name, ""):
-            key = options.get(self._posarg_name, "")
+            key = options.get(self._posarg_name, "").replace("-", "_")
             if key.startswith("_"):
                 raise ArgumentError(command, key)
 
@@ -68,6 +68,6 @@ class Dispatcher:
         if callable(command):
             return command(options)
 
-        raise DocoptLanguageError(
-            "Cannot find handler for arguments: '{}'".format(" ".join(argv))
+        raise ArgumentError(
+            command, "Cannot find handler for arguments: '{}'".format(" ".join(argv))
         )
