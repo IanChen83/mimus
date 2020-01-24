@@ -5,7 +5,7 @@ import pytest
 
 from mimus.parser import (
     Parser,
-    Config,
+    ConfigItem,
     IncludeItem,
     StackServiceItem,
     TemplateServiceItem,
@@ -42,7 +42,7 @@ class Test_Parser:
         resovled_path = str(file_path.resolve())
 
         parser = Parser()
-        parser.configs[resovled_path] = Config(
+        parser.configs[resovled_path] = ConfigItem(
             {}, datadir.resolve(), file=resovled_path
         )
         config = parser.parse_config("", datadir, str(file_path))
@@ -175,7 +175,7 @@ class Test_Parser:
 
         parser = Parser.parse("", datadir, "")
         parser.includes["include"] = IncludeItem("include", file_path)
-        parser.configs[resolved_path] = Config({}, datadir)
+        parser.configs[resolved_path] = ConfigItem({}, datadir)
         parser.configs[resolved_path].services = [
             ServiceItem(dict(name="include_service")),
         ]
@@ -195,7 +195,7 @@ class Test_Parser:
         parser.services["prototype1"] = TemplateServiceItem(
             dict(name="prototype1", template="prototype2", host="prototype1_host"),
         )
-        parser.root = Config({}, datadir)
+        parser.root = ConfigItem({}, datadir)
         parser.root.services = [
             TemplateServiceItem(
                 dict(name="template", template="prototype1", path="template_path")
@@ -282,7 +282,7 @@ class Test_Parser:
 
         parser = Parser.parse("", datadir, "")
         parser.includes["test_parse_root"] = IncludeItem("test_parse_root", file_path)
-        parser.configs[resolved_path] = Config({}, datadir)
+        parser.configs[resolved_path] = ConfigItem({}, datadir)
         parser.configs[resolved_path].services = [
             ServiceItem(dict(name="name")),
             StackServiceItem(dict(stack="test_parse_include")),
@@ -309,7 +309,7 @@ class Test_Parser:
 class Test_Config:
     def test_init(self, datadir):
         """
-        Test if Config.__init__ works as expected.
+        Test if ConfigItem.__init__ works as expected.
         """
 
         file_path = datadir / "test_parse_root.yml"
@@ -320,7 +320,7 @@ class Test_Config:
             "services": [{"stack": "stack",}, {"name": "name", "host": "host",}],
         }
 
-        config = Config(obj, datadir)
+        config = ConfigItem(obj, datadir)
 
         assert len(config.includes) == 1
         assert config.includes[0] == IncludeItem("include_1", file_path)
@@ -331,7 +331,7 @@ class Test_Config:
 
     def test_init_exception(self, datadir):
         """
-        Test if Config.__init__ raises exception on malformed inputs.
+        Test if ConfigItem.__init__ raises exception on malformed inputs.
         """
 
         file_path = datadir / "test_parse_root.yml"
@@ -354,7 +354,7 @@ class Test_Config:
 
         for case in cases:
             with pytest.raises(ConfigError) as excinfo:
-                Config(*case.args)
+                ConfigItem(*case.args)
 
                 assert case.exception in str(excinfo.value)
 
