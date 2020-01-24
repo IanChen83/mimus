@@ -3,7 +3,7 @@ from pathlib import Path
 from types import SimpleNamespace as Case
 import pytest
 
-from mimus.config.parser import (
+from mimus.parser import (
     Parser,
     Config,
     IncludeItem,
@@ -365,10 +365,10 @@ class Test_IncludeItem:
         Test if IncludeItem.__init__ works as expected.
         """
 
-        item = IncludeItem("name", Path("mimus/config/parser.py"), file="file")
+        item = IncludeItem("name", Path("mimus/parser.py"), file="file")
 
         assert item.name == "name"
-        assert item.path.samefile(Path("mimus/config/parser.py"))
+        assert item.path.samefile(Path("mimus/parser.py"))
         assert item.file == "file"
 
     def test_init_exception(self):
@@ -378,7 +378,7 @@ class Test_IncludeItem:
 
         cases = [
             Case(
-                args=("", Path("mimus/config/parser.py")),
+                args=("", Path("mimus/parser.py")),
                 kwargs={},
                 exception="includes.item.name cannot be an empty string",
             ),
@@ -402,12 +402,12 @@ class Test_IncludeItem:
 
         cases = [
             Case(
-                args=("name", Path("mimus/config/parser.py")),
+                args=("name", Path("mimus/parser.py")),
                 kwargs={},
                 output="IncludeItem(name='name', path=",
             ),
             Case(
-                args=("name", Path("mimus/config/parser.py")),
+                args=("name", Path("mimus/parser.py")),
                 kwargs=dict(file="file"),
                 output="IncludeItem(name='name', path=",
             ),
