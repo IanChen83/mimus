@@ -12,7 +12,7 @@ __all__ = (
     "SUPPORTED_PARSERS",
     "load",
     "loads",
-    "Config",
+    "ConfigItem",
     "Parser",
     "StackServiceItem",
     "TemplateServiceItem",
@@ -204,7 +204,7 @@ class Parser:
         return results
 
 
-class Config:
+class ConfigItem:
     def __init__(self, obj, cwd, *, file=""):
         self.file = file
 
@@ -487,7 +487,7 @@ def _parse_config_by_version(data, cwd, file=""):
         raise ConfigError("Invalid version {}".format(version), file=file)
 
     if version == 0:
-        config_cls = Config
+        config_cls = ConfigItem
     else:
         raise ConfigError("Version {} is not supported".format(version), file=file)
 
