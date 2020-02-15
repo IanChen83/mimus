@@ -371,7 +371,7 @@ class BasicServiceItem(
 
 
 class TemplateServiceItem(
-    ConfigItem,
+    BasicServiceItem,
     fields="name,template,host,path,port,protocol,protocol_attrs,handler",
     defaults=dict(
         host="", path="", port=0, handler="", protocol="", protocol_attrs=None,
@@ -380,23 +380,6 @@ class TemplateServiceItem(
     """A kind of service item based on the template. Any value that is not
     zero value will overwrite the value of the same attribute in the template.
     """
-
-    _validate_name = _validate_name
-    _validate_path = _validate_path
-    _validate_port = _validate_port
-    _validate_protocol = _validate_protocol
-    _transform_protocol_attrs = _transform_protocol_attrs
-    _validate_handler = _validate_handler
-
-    @classmethod
-    def from_dict(cls, d):
-        d = d.copy()
-        new_kwargs = {}
-        for field in cls._fields:
-            if field in d:
-                new_kwargs[field] = d.pop(field)
-        new_kwargs["protocol_attrs"] = d
-        return super().from_dict(new_kwargs)
 
     @staticmethod
     def _validate_template(template):

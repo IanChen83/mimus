@@ -1,6 +1,5 @@
 from types import SimpleNamespace
 from copy import copy
-from functools import wraps
 
 from .error import ConfigError
 
@@ -15,13 +14,44 @@ class ConfigItem(SimpleNamespace):
 
     __slots__ = ()
 
+    def __init__(self, **kwargs):
+        new_kwargs = {}
+        for field in self._fields:
+            if field in kwargs:
+                new_kwargs[field] = kwargs.pop(field)
+            elif field in self._defaults:
+                new_kwargs[field] = copy(self._defaults.get(field))
+            else:
+                raise ConfigError(f"'{field}' is a required field")
+
+        if kwargs:
+            names = ", ".join(kwargs)
+            raise ConfigError(
+                f"{self.__class__.__name__} get unexpected field(s) '{names}'"
+            )
+
+        # Call SimpleNamespace.__init__ to set field values.
+        super().__init__(**new_kwargs)
+
+        for field in self._fields:
+            value = getattr(self, field)
+
+            # transform value
+            if hasattr(self, f"_transform_{field}"):
+                value = getattr(self, f"_transform_{field}")(value)
+                setattr(self, field, value)
+
+            # validate value
+            if hasattr(self, f"_validate_{field}"):
+                getattr(self, f"_validate_{field}")(value)
+
     def __init_subclass__(cls, fields="", defaults=None, **kwargs):
         super().__init_subclass__(**kwargs)
 
         # normalize parameters
         if isinstance(fields, str):
             fields = fields.replace(",", " ").split()
-        fields = list(map(str, fields))
+        fields = tuple(map(str, fields))
 
         defaults = defaults or {}
 
@@ -32,12 +62,6 @@ class ConfigItem(SimpleNamespace):
 
         cls._fields = fields
         cls._defaults = defaults
-
-        setattr(
-            cls,
-            "__init__",
-            _get_init_wrapper(getattr(cls, "__init__"), fields, defaults),
-        )
 
     def to_dict(self):
         return {field: getattr(self, field) for field in self._fields}
@@ -55,41 +79,3 @@ class ConfigItem(SimpleNamespace):
     @classmethod
     def from_dict(cls, d):
         return cls(**d)
-
-
-def _get_init_wrapper(fn, fields, defaults):
-    @wraps(fn)
-    def __init__(self, **kwargs):
-        new_kwargs = {}
-        for field in fields:
-            if field in kwargs:
-                new_kwargs[field] = kwargs.pop(field)
-            elif field in defaults:
-                new_kwargs[field] = copy(defaults.get(field))
-            else:
-                raise ConfigError(f"'{field}' is a required field")
-
-        if kwargs:
-            names = ", ".join(kwargs)
-            raise ConfigError(
-                f"{self.__class__.__name__} get unexpected field(s) '{names}'"
-            )
-
-        fn(self, **new_kwargs)
-
-        # From here onwards, we use getattr() to get instance attribute
-        # because the init function of the subclass might modify its
-        # field values.
-        for field in fields:
-            value = getattr(self, field)
-
-            # transform value
-            if hasattr(self, f"_transform_{field}"):
-                value = getattr(self, f"_transform_{field}")(value)
-                setattr(self, field, value)
-
-            # validate value
-            if hasattr(self, f"_validate_{field}"):
-                getattr(self, f"_validate_{field}")(value)
-
-    return __init__
