@@ -1,7 +1,8 @@
 version: 0
 
 imports:
-  - ./example_include.yml
+  # This is a comment.
+  - ./example.yml
 
 stacks:
   - name: example_stack

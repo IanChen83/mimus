@@ -89,14 +89,7 @@ class Parser:
             self.services[service.name] = service
             return
 
-        prev = self.services[service.name]
-        if service.file and prev.file:
-            err_msg = "Duplicate service name '{}' found in {} and {}".format(
-                service.name, service.file, prev.file
-            )
-        else:
-            err_msg = "Duplicate service name '{}' found".format(service.name)
-        raise ConfigError(err_msg)
+        raise ConfigError(f"Duplicate service name '{service.name}' found")
 
     @classmethod
     def parse(cls, content, cwd, file=""):
@@ -234,25 +227,24 @@ class ConfigFile(
         yaml = YAML()
         return yaml.load(s) or {}
 
-    def _parse_stack(self, item):
-        return StackItem(**item, file=self.file)
+    @staticmethod
+    def _parse_stack(item):
+        return StackItem.from_dict(item)
 
     def _parse_import(self, item):
         path = self.cwd.joinpath(item)
-        return ImportItem(path=path, file=self.file)
+        return ImportItem(path=path)
 
     def _parse_service(self, item):
         if "stack" in item:
-            return StackServiceItem(stack=item["stack"], file=self.file)
+            return StackServiceItem(stack=item["stack"])
 
         if "template" in item and "name" in item:
             item = item.copy()
-            item["file"] = self.file
             return TemplateServiceItem.from_dict(item)
 
         if "name" in item:
             item = item.copy()
-            item["file"] = self.file
             return BasicServiceItem.from_dict(item)
 
         raise ConfigError(
@@ -272,24 +264,6 @@ def _validate_name(name):
         return
 
     raise ConfigError("name should be a non-empty string")
-
-
-@staticmethod
-def _validate_file(file):
-    if file == "" or Path(file).is_file():
-        return
-
-    raise ConfigError(f"Field 'file' should point to a file")
-
-
-@staticmethod
-def _transform_inherits(inherits):
-    if inherits is None:
-        return []
-    if isinstance(inherits, (tuple, list)):
-        return list(inherits)
-
-    raise ConfigError("Stack inherits should be a sequence")
 
 
 @staticmethod
@@ -334,32 +308,30 @@ def _validate_handler(handler):
     raise ConfigError("handler should be a string")
 
 
-class ImportItem(ConfigItem, fields="path,file", defaults=dict(file="")):
+class ImportItem(ConfigItem, fields="path"):
     """Serve as a reference to another file. `path` has to be a valid path
     pointing to a file.
     """
 
-    _validate_file = _validate_file
-
     @staticmethod
     def _transform_path(path):
         if not path.is_file():
-            raise ConfigError("Field 'path' should point to a file")
+            raise ConfigError(f"'path' field value '{path}' should point to a file")
 
         return path.resolve()
 
     def __eq__(self, obj):
         return self.path.samefile(obj.path)
 
+    def __str__(self):
+        return str(self.path)
 
-class StackItem(
-    ConfigItem, fields="name,services,file", defaults=dict(services=[], file="")
-):
+
+class StackItem(ConfigItem, fields="name,services", defaults=dict(services=[])):
     """A stack that defines a list of services referenced by names.
     """
 
     _validate_name = _validate_name
-    _validate_file = _validate_file
 
     @staticmethod
     def _transform_services(services):
@@ -371,15 +343,9 @@ class StackItem(
 
 class BasicServiceItem(
     ConfigItem,
-    fields="name,host,path,port,protocol,protocol_attrs,handler,file,inherits",
+    fields="name,host,path,port,protocol,protocol_attrs,handler",
     defaults=dict(
-        host="",
-        path="",
-        port=0,
-        protocol="",
-        protocol_attrs=None,
-        file="",
-        inherits=None,
+        host="", path="", port=0, protocol="", handler="", protocol_attrs=None,
     ),
 ):
     """Serve as the basic service configuration item. Every service item will
@@ -393,21 +359,22 @@ class BasicServiceItem(
     _transform_protocol_attrs = _transform_protocol_attrs
     _validate_handler = _validate_handler
 
-    _validate_file = _validate_file
-    _transform_inherits = _transform_inherits
+    @classmethod
+    def from_dict(cls, d):
+        d = d.copy()
+        new_kwargs = {}
+        for field in cls._fields:
+            if field in d:
+                new_kwargs[field] = d.pop(field)
+        new_kwargs["protocol_attrs"] = d
+        return super().from_dict(new_kwargs)
 
 
 class TemplateServiceItem(
     ConfigItem,
-    fields="name,template,host,path,port,protocol,protocol_attrs,handler,file,inherits",
+    fields="name,template,host,path,port,protocol,protocol_attrs,handler",
     defaults=dict(
-        host="",
-        path="",
-        port=0,
-        protocol="",
-        protocol_attrs=None,
-        file="",
-        inherits=None,
+        host="", path="", port=0, handler="", protocol="", protocol_attrs=None,
     ),
 ):
     """A kind of service item based on the template. Any value that is not
@@ -421,8 +388,15 @@ class TemplateServiceItem(
     _transform_protocol_attrs = _transform_protocol_attrs
     _validate_handler = _validate_handler
 
-    _validate_file = _validate_file
-    _transform_inherits = _transform_inherits
+    @classmethod
+    def from_dict(cls, d):
+        d = d.copy()
+        new_kwargs = {}
+        for field in cls._fields:
+            if field in d:
+                new_kwargs[field] = d.pop(field)
+        new_kwargs["protocol_attrs"] = d
+        return super().from_dict(new_kwargs)
 
     @staticmethod
     def _validate_template(template):
@@ -432,15 +406,10 @@ class TemplateServiceItem(
         raise ConfigError("template should be a non-empty string")
 
 
-class StackServiceItem(
-    ConfigItem, fields="stack,file,inherits", defaults={"file": "", "inherits": None}
-):
+class StackServiceItem(ConfigItem, fields="stack"):
     """A kind of service item that resolves to a stack, which is a list of
     service items.
     """
-
-    _validate_file = _validate_file
-    _transform_inherits = _transform_inherits
 
     @staticmethod
     def _validate_stack(stack):

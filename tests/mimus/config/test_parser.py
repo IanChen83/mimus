@@ -83,44 +83,33 @@ class Test_Parser:
             assert len(parser.imports) == 1
             assert parser.imports[file_path] == ImportItem(path=file_path)
 
-    def test_register_service(self, datadir):
+    def test_register_service(self):
         """
         Test if Parser.register_service works as expected.
         """
-        file_path = datadir / "test_parse_root.yml"
-        file_path.touch()
 
         parser = Parser()
-        service = BasicServiceItem(
-            name="name", path="path", file=str(file_path), handler=""
-        )
+        service = BasicServiceItem(name="name", path="path", handler="")
         parser.register_service(service)
 
         assert len(parser.services) == 1
         assert parser.services["name"] == service
 
-    def test_register_duplicate_service(self, datadir):
+    def test_register_duplicate_service(self):
         """
         Test if Parser.register_service raises exception when
         a service with the same name already exists.
         """
-        file_path = datadir / "test_parse_root.yml"
-        file_path.touch()
 
         parser = Parser()
-        service = BasicServiceItem(
-            name="name", path="path", file=str(file_path), handler="",
-        )
+        service = BasicServiceItem(name="name", path="path", handler="",)
         parser.services["name"] = TemplateServiceItem(
-            name="name", template="template", file=str(file_path), handler="",
+            name="name", template="template", handler="",
         )
         with pytest.raises(ConfigError) as excinfo:
             parser.register_service(service)
 
-        assert (
-            str(excinfo.value)
-            == f"Duplicate service name 'name' found in {file_path} and {file_path}"
-        )
+        assert str(excinfo.value) == "Duplicate service name 'name' found"
 
 
 class Test_Config:
@@ -168,13 +157,9 @@ class Test_ImportItem:
         Test if ImportItem.__init__ works as expected.
         """
 
-        item = ImportItem(
-            path=datadir / "test_parse_root.yml",
-            file=str(datadir / "test_parse_root.yml"),
-        )
+        item = ImportItem(path=datadir / "test_parse_root.yml")
 
         assert item.path.samefile(datadir / "test_parse_root.yml")
-        assert item.file == str(datadir / "test_parse_root.yml")
 
     def test_init_exception(self):
         """
@@ -185,7 +170,7 @@ class Test_ImportItem:
             Case(kwargs={}, exception="'path' is a required field",),
             Case(
                 kwargs=dict(path=Path("non-existed-file")),
-                exception="Field 'path' should point to a file",
+                exception="should point to a file",
             ),
         ]
 
