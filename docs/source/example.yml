@@ -1,8 +1,15 @@
 version: 0
 
-includes:
+imports:
+  - ./example_include.yml
+
+stacks:
   - name: example_stack
-    path: ./example_stack.yml
+    services:
+      - example_static
+      - example-template
+      - example-template-overwrite
+      - example-handler
 
 services:
   - name: example-static
@@ -12,7 +19,7 @@ services:
     method: get
     path: /asdf/*/*.js
 
-    handler: run.static
+    handler: run:static
 
   - name: example-template
     template: example-static
@@ -27,6 +34,11 @@ services:
     host: example.com
     path: /api/
 
-    handler: run.main
+    handler: run:main
+
+  - name: example-context
+    template: example_static
+    context:
+      message: "with context"
 
   - stack: example_stack
