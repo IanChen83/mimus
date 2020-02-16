@@ -1,10 +1,19 @@
 version: 0
+imports:
+    - ./test_parse_include.yml
 
-includes:
-    - name: test_parse_include
-      path: test_parse_include.yml
+stacks:
+    - name: example_stack
+      services:
+        - name
 
 services:
-    - name: name
+    - stack: included_stack
 
-    - stack: test_parse_include
+    - stack: example_stack
+
+    - name: name
+      handler: handler
+
+    - name: name2
+      template: name

@@ -63,6 +63,16 @@ class ConfigItem(SimpleNamespace):
         cls._fields = fields
         cls._defaults = defaults
 
+    def copy(self):
+        new_obj = self.__class__.__new__(self.__class__)
+        for field in self._fields:
+            setattr(new_obj, field, getattr(self, field))
+        return new_obj
+
+    @classmethod
+    def from_dict(cls, d):
+        return cls(**d)
+
     def to_dict(self):
         return {field: getattr(self, field) for field in self._fields}
 
@@ -70,12 +80,8 @@ class ConfigItem(SimpleNamespace):
         if self.__class__ != value.__class__:
             return False
 
-        return self.to_dict() == value.to_dict()
+        return super().__eq__(value)
 
-    def __hash__(self):
-        # A config item is hashable if and only if all of its field values are hashable.
-        return hash(tuple(getattr(self, field) for field in self._fields))
-
-    @classmethod
-    def from_dict(cls, d):
-        return cls(**d)
+    def __repr__(self):
+        arg_list = ", ".join(f"{k}={getattr(self, k)!r}" for k in self._fields)
+        return f"{type(self).__name__}({arg_list})"

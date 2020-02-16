@@ -1,1 +1,9 @@
 version: 0
+
+stacks:
+    - name: included_stack
+      services:
+        - included_service
+
+services:
+    - name: included_service

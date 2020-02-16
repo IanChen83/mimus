@@ -2,15 +2,16 @@
 parser parses config files
 """
 from pathlib import Path
+import textwrap
 
-from ruamel.yaml import YAML
+import ruamel.yaml as yaml
 
 from .configitem import ConfigItem
 from .error import ConfigError
 
 __all__ = (
     "CURRENT_VERSION",
-    "SUPPORTED_PARSERS",
+    "SUPPORTED_VERSIONS",
     "load",
     "loads",
     "ConfigFile",
@@ -23,7 +24,7 @@ __all__ = (
 
 
 CURRENT_VERSION = 0
-SUPPORTED_PARSERS = (0,)
+SUPPORTED_VERSIONS = (0,)
 
 
 def load(f, *, file=""):
@@ -56,20 +57,22 @@ class Parser:
         self.stacks = {}
         self.configs = {}
 
-    def parse_config(self, content, cwd, file):
+    def parse_and_register_config(self, content, cwd, file):
         cwd = cwd.resolve()
         if file != "":
             file = str(Path(file).resolve())
 
         if file not in self.configs:
-            self.configs[file] = ConfigFile.loads(content, cwd, file=file)
+            try:
+                self.configs[file] = ConfigFile.loads(content, cwd)
+            except ConfigError as e:
+                raise ConfigError(e, file=file)
 
         return self.configs[file]
 
     def register_import(self, imp):
         if imp.path not in self.imports:
             self.imports[imp.path] = imp
-            return
 
     def register_stack(self, stack):
         if stack.name not in self.stacks:
@@ -78,11 +81,10 @@ class Parser:
 
         prev = self.imports[stack.name]
         if prev.services != stack.services:
-            err_msg = (
-                "Duplicate stack name '{}' but different services list"
-                "{} and {} found in {} and {}."
-            ).format(stack.name, prev.services, stack.services, prev.file, stack.file)
-            raise ConfigError(err_msg)
+            raise ConfigError(
+                f"Duplicate stack name '{stack.name}' but different services list"
+                f"{prev.services} and {stack.services} found."
+            )
 
     def register_service(self, service):
         if service.name not in self.services:
@@ -95,22 +97,25 @@ class Parser:
     def parse(cls, content, cwd, file=""):
         parser = cls()
 
-        config = parser.parse_config(content, cwd, file)
+        config = parser.parse_and_register_config(content, cwd, file)
         parser.root = config
-
         unhandled_imports = list(config.imports)
+
         while unhandled_imports:
             imp = unhandled_imports.pop(0)
-
             parser.register_import(imp)
+
             if str(imp.path) not in parser.configs:
                 # If imp.path is already in the config list, we won't
-                # parse it (and append imports) again. This allows users
-                # to include the same file multiple times with different names.
+                # parse it (and append imports) again. With this, users
+                # won't have to worry about cyclic import
                 with imp.path.open() as f:
                     content = f.read()
 
-                config = parser.parse_config(content, imp.path.parent, str(imp.path))
+                config = parser.parse_and_register_config(
+                    content, imp.path.parent, str(imp.path)
+                )
+
                 unhandled_imports.extend(config.imports)
 
         for config in parser.configs.values():
@@ -128,6 +133,7 @@ class Parser:
             return
 
         unhandled_services = list(reversed(self.root.services))
+        yielded = set()
 
         included_stacks = set()
         while unhandled_services:
@@ -143,50 +149,57 @@ class Parser:
                 unhandled_services.append(self.resolve_template(service))
 
             elif isinstance(service, BasicServiceItem):
-                yield service
+                if service.name not in yielded:
+                    yield service
+                    yielded.add(service.name)
 
             else:
                 raise RuntimeError(
-                    "Unexpected ServiceItemType '{}'".format(service.item_type)
+                    f"Unexpected service type '{service.__class__.__name__}'"
                 )
 
     def resolve_template(self, obj):
         if obj.template not in self.services:
             raise ConfigError(
-                "Cannot find template '{}' for service '{}'".format(
-                    obj.template, obj.name,
-                ),
-                file=obj.file,
+                f"Cannot find template '{obj.template}' for service '{obj.name}'"
             )
         template = self.services[obj.template]
+
+        # The way "template" works is
+        # 1. Duplicate the referenced template object
+        # 2. Overwrite its value if the current service defines any (except)
+        #    for "template" field.
         new_obj = template.copy()
         new_obj.name = obj.name
-        new_obj.set_attrs_from(obj)
 
-        new_obj.file = obj.file
-        new_obj.inherits = ("template:" + template.name, *template.inherits)
+        for field, value in obj.to_dict().items():
+            # This requires all of the default values
+            # to be falsy.
+            if field != "template" and value:
+                setattr(new_obj, field, value)
 
         return new_obj
 
     def resolve_stack(self, obj):
         if obj.stack not in self.stacks:
-            raise ConfigError(
-                "Cannot find stack with name '{}'".format(obj.stack), file=obj.file,
-            )
+            raise ConfigError(f"Cannot find stack with name '{obj.stack}'")
 
-        stack_path = self.stacks[obj.stack].path
-        config = self.configs[str(stack_path)]
-        results = config.services.copy()
+        stack = self.stacks[obj.stack]
+        results = []
 
-        for service in results:
-            service.inherits = ("stack:" + obj.stack, *service.inherits)
+        for name in stack.services:
+            if name not in self.services:
+                raise ConfigError(
+                    f"Cannot find service '{name}' defined in stack '{stack.name}'"
+                )
+            results.append(self.services[name])
 
         return results
 
 
 class ConfigFile(
     ConfigItem,
-    fields="imports,stacks,services,cwd,file,version",
+    fields="imports,stacks,services,cwd,version",
     defaults=dict(imports=[], stacks=[], services=[], version=CURRENT_VERSION),
 ):
     """
@@ -205,27 +218,29 @@ class ConfigFile(
     def _transform_services(self, services):
         return [self._parse_service(item) for item in services]
 
-    def _validate_version(self, version):
+    @staticmethod
+    def _validate_version(version):
         if not isinstance(version, int):
-            raise ConfigError("Invalid version {}".format(version), file=self.file)
-        if version not in SUPPORTED_PARSERS:
-            raise ConfigError(
-                "Unsupported config version {}".format(version), file=self.file
-            )
+            raise ConfigError(f"Invalid version type '{type(version).__name__}'")
+        if version not in SUPPORTED_VERSIONS:
+            raise ConfigError(f"Unsupported config version '{version}'")
 
     @classmethod
-    def load(cls, f, cwd, *, file=""):
-        return cls.loads(f.read(), cwd, file=file)
+    def load(cls, f, cwd):
+        return cls.loads(f.read(), cwd)
 
     @classmethod
-    def loads(cls, s, cwd, *, file=""):
+    def loads(cls, s, cwd):
         obj = cls._load_obj(s)
-        return cls(**obj, cwd=cwd, file=file)
+        return cls(**obj, cwd=cwd)
 
     @staticmethod
     def _load_obj(s):
-        yaml = YAML()
-        return yaml.load(s) or {}
+        return yaml.YAML().load(s) or {}
+
+    @staticmethod
+    def _dump_obj(obj):
+        return yaml.round_trip_dump(obj)
 
     @staticmethod
     def _parse_stack(item):
@@ -235,7 +250,8 @@ class ConfigFile(
         path = self.cwd.joinpath(item)
         return ImportItem(path=path)
 
-    def _parse_service(self, item):
+    @staticmethod
+    def _parse_service(item):
         if "stack" in item:
             return StackServiceItem(stack=item["stack"])
 
@@ -247,9 +263,9 @@ class ConfigFile(
             item = item.copy()
             return BasicServiceItem.from_dict(item)
 
-        raise ConfigError(
-            "Unknown service definition {}".format(item), file=self.file,
-        )
+        definition = ConfigFile._dump_obj(item)
+        definition = textwrap.indent(definition, " " * 2)
+        raise ConfigError(f"Unknown service definition:\n{definition}")
 
 
 #################################################
