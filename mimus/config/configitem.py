@@ -33,6 +33,11 @@ class ConfigItem(SimpleNamespace):
         # Call SimpleNamespace.__init__ to set field values.
         super().__init__(**new_kwargs)
 
+        # If _disable_post_init is set, we will not run `_transform_<attr>`
+        # and `_validate_<attr>` functions.
+        if hasattr(self, "_disable_post_init"):
+            return
+
         for field in self._fields:
             value = getattr(self, field)
 
@@ -63,10 +68,17 @@ class ConfigItem(SimpleNamespace):
         cls._fields = fields
         cls._defaults = defaults
 
-    def copy(self):
+    def copy(self, post_init=False):
         new_obj = self.__class__.__new__(self.__class__)
-        for field in self._fields:
-            setattr(new_obj, field, getattr(self, field))
+
+        if post_init:
+            self.__class__.__init__(new_obj, **self.to_dict())
+            return new_obj
+
+        setattr(new_obj, "_disable_post_init", True)
+        self.__class__.__init__(new_obj, **self.to_dict())
+        delattr(new_obj, "_disable_post_init")
+
         return new_obj
 
     @classmethod
