@@ -2,6 +2,7 @@
 parser parses config files
 """
 from pathlib import Path
+from collections import namedtuple
 import textwrap
 
 import ruamel.yaml as yaml
@@ -12,8 +13,6 @@ from .error import ConfigError
 __all__ = (
     "CURRENT_VERSION",
     "SUPPORTED_VERSIONS",
-    "load",
-    "loads",
     "ConfigFile",
     "Parser",
     "StackServiceItem",
@@ -25,28 +24,6 @@ __all__ = (
 
 CURRENT_VERSION = 0
 SUPPORTED_VERSIONS = (0,)
-
-
-def load(f, *, file=""):
-    """
-    load loads configurations from file reader.
-    """
-    return loads(f.read(), file=file)
-
-
-def loads(data, *, file=""):
-    """
-    loads loads configurations from string.
-    """
-    if file == "":
-        cwd = Path(file)
-    else:
-        file_path = Path(file)
-        if not file_path.is_file():
-            raise ConfigError("'file' should be a valid file path")
-        cwd = file_path.parent
-
-    parser = Parser.parse(data, cwd, file)
 
 
 class Parser:
@@ -127,6 +104,9 @@ class Parser:
                     parser.register_service(service)
 
         return parser
+
+    def build_config(self):
+        pass
 
     def iter_service(self):
         if self.root is None:
@@ -250,10 +230,12 @@ class ConfigFile(
         path = self.cwd.joinpath(item)
         return ImportItem(path=path)
 
-    @staticmethod
-    def _parse_service(item):
+    def _parse_service(self, item):
         if "stack" in item:
             return StackServiceItem(stack=item["stack"])
+
+        if "handler" in item:
+            item["handler"] = HandlerField(item["handler"], self.cwd)
 
         if "template" in item and "name" in item:
             item = item.copy()
@@ -318,10 +300,14 @@ def _transform_protocol_attrs(protocol_attrs):
 
 @staticmethod
 def _validate_handler(handler):
-    if isinstance(handler, str):
-        return handler
+    if handler is None:
+        return
+    if isinstance(handler, HandlerField):
+        if not isinstance(handler.fqn, str) or handler.fqn == "":
+            raise ConfigError("handler should be a non-empty string")
+        return
 
-    raise ConfigError("handler should be a string")
+    raise RuntimeError("handler should be a HandlerField object")
 
 
 class ImportItem(ConfigItem, fields="path"):
@@ -361,7 +347,7 @@ class BasicServiceItem(
     ConfigItem,
     fields="name,host,path,port,protocol,protocol_attrs,handler",
     defaults=dict(
-        host="", path="", port=0, protocol="", handler="", protocol_attrs=None,
+        host="", path="", port=0, protocol="", handler=None, protocol_attrs=None,
     ),
 ):
     """Serve as the basic service configuration item. Every service item will
@@ -390,7 +376,7 @@ class TemplateServiceItem(
     BasicServiceItem,
     fields="name,template,host,path,port,protocol,protocol_attrs,handler",
     defaults=dict(
-        host="", path="", port=0, handler="", protocol="", protocol_attrs=None,
+        host="", path="", port=0, handler=None, protocol="", protocol_attrs=None,
     ),
 ):
     """A kind of service item based on the template. Any value that is not
@@ -416,3 +402,6 @@ class StackServiceItem(ConfigItem, fields="stack"):
             return
 
         raise ConfigError("stack should be a non-empty string")
+
+
+HandlerField = namedtuple("HandlerField", "fqn,origin")

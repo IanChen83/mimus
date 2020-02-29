@@ -13,6 +13,7 @@ from mimus.config.parser import (
     StackServiceItem,
     TemplateServiceItem,
     BasicServiceItem,
+    HandlerField,
     ConfigError,
 )
 
@@ -85,7 +86,7 @@ class Test_Parser:
         """
 
         parser = Parser()
-        service = BasicServiceItem(name="name", path="path", handler="")
+        service = BasicServiceItem(name="name", path="path")
         parser.register_service(service)
 
         assert len(parser.services) == 1
@@ -98,10 +99,8 @@ class Test_Parser:
         """
 
         parser = Parser()
-        service = BasicServiceItem(name="name", path="path", handler="",)
-        parser.services["name"] = TemplateServiceItem(
-            name="name", template="template", handler="",
-        )
+        service = BasicServiceItem(name="name", path="path")
+        parser.services["name"] = TemplateServiceItem(name="name", template="template")
         with pytest.raises(ConfigError) as excinfo:
             parser.register_service(service)
 
@@ -122,7 +121,9 @@ class Test_Parser:
         parser = Parser.parse(content_root, datadir, str(root_path))
         assert parser.root is parser.configs[str(root_path.resolve())]
         assert parser.services == dict(
-            name=BasicServiceItem(name="name", handler="handler"),
+            name=BasicServiceItem(
+                name="name", handler=HandlerField("handler", datadir)
+            ),
             name2=TemplateServiceItem(name="name2", template="name"),
             included_service=BasicServiceItem(name="included_service"),
         )
@@ -148,23 +149,19 @@ class Test_Parser:
         parser = Parser.parse(content_root, datadir, str(root_path))
         assert list(parser.iter_service()) == [
             BasicServiceItem(name="included_service"),
-            BasicServiceItem(name="name", handler="handler"),
-            BasicServiceItem(name="name2", handler="handler"),
+            BasicServiceItem(name="name", handler=HandlerField("handler", datadir)),
+            BasicServiceItem(name="name2", handler=HandlerField("handler", datadir)),
         ]
 
     def test_resolve_template(self):
         parser = Parser()
-        parser.services["template"] = BasicServiceItem(
-            name="template", handler="template_handler"
-        )
+        parser.services["template"] = BasicServiceItem(name="template")
 
         result = parser.resolve_template(
             TemplateServiceItem(name="derived", port=80, template="template")
         )
 
-        assert result == BasicServiceItem(
-            name="derived", port=80, handler="template_handler"
-        )
+        assert result == BasicServiceItem(name="derived", port=80)
 
     def test_resolve_template_not_found(self):
         parser = Parser()
@@ -235,7 +232,7 @@ services:
         assert config.stacks == [StackItem(name="example_stack", services=["name"])]
         assert config.services == [
             StackServiceItem(stack="example_stack"),
-            BasicServiceItem(name="name", handler="handler"),
+            BasicServiceItem(name="name", handler=HandlerField("handler", datadir)),
             TemplateServiceItem(name="name2", template="name"),
         ]
 
@@ -366,14 +363,14 @@ class Test_BasicServiceItem:
             path="path",
             port=80,
             protocol="protocol",
-            handler="handler",
+            handler=HandlerField("handler", ""),
         )
 
         assert service.name == "name"
         assert service.host == "host"
         assert service.path == "path"
         assert service.port == 80
-        assert service.handler == "handler"
+        assert service.handler == HandlerField("handler", "")
         assert service.protocol == "protocol"
         assert service.protocol_attrs == {}
 
