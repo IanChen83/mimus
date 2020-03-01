@@ -86,7 +86,7 @@ class Test_Parser:
         """
 
         parser = Parser()
-        service = BasicServiceItem(name="name", path="path")
+        service = BasicServiceItem(name="name")
         parser.register_service(service)
 
         assert len(parser.services) == 1
@@ -99,7 +99,7 @@ class Test_Parser:
         """
 
         parser = Parser()
-        service = BasicServiceItem(name="name", path="path")
+        service = BasicServiceItem(name="name")
         parser.services["name"] = TemplateServiceItem(name="name", template="template")
         with pytest.raises(ConfigError) as excinfo:
             parser.register_service(service)
@@ -360,7 +360,6 @@ class Test_BasicServiceItem:
         service = BasicServiceItem(
             name="name",
             host="host",
-            path="path",
             port=80,
             protocol="protocol",
             handler=HandlerField("handler", ""),
@@ -368,7 +367,6 @@ class Test_BasicServiceItem:
 
         assert service.name == "name"
         assert service.host == "host"
-        assert service.path == "path"
         assert service.port == 80
         assert service.handler == HandlerField("handler", "")
         assert service.protocol == "protocol"

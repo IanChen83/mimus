@@ -265,14 +265,6 @@ def _validate_name(name):
 
 
 @staticmethod
-def _validate_path(path):
-    if isinstance(path, str):
-        return
-
-    raise ConfigError("path should be a string")
-
-
-@staticmethod
 def _validate_port(port):
     if isinstance(port, int) and 0 <= port < 65536:
         return
@@ -345,17 +337,14 @@ class StackItem(ConfigItem, fields="name,services", defaults=dict(services=[])):
 
 class BasicServiceItem(
     ConfigItem,
-    fields="name,host,path,port,protocol,protocol_attrs,handler",
-    defaults=dict(
-        host="", path="", port=0, protocol="", handler=None, protocol_attrs=None,
-    ),
+    fields="name,host,port,protocol,protocol_attrs,handler",
+    defaults=dict(host="", port=0, protocol="", protocol_attrs=None, handler=None),
 ):
     """Serve as the basic service configuration item. Every service item will
     be eventually resolved to this type.
     """
 
     _validate_name = _validate_name
-    _validate_path = _validate_path
     _validate_port = _validate_port
     _validate_protocol = _validate_protocol
     _transform_protocol_attrs = _transform_protocol_attrs
@@ -374,10 +363,8 @@ class BasicServiceItem(
 
 class TemplateServiceItem(
     BasicServiceItem,
-    fields="name,template,host,path,port,protocol,protocol_attrs,handler",
-    defaults=dict(
-        host="", path="", port=0, handler=None, protocol="", protocol_attrs=None,
-    ),
+    fields="name,template,host,port,protocol,protocol_attrs,handler",
+    defaults=dict(host="", port=0, protocol="", protocol_attrs=None, handler=None,),
 ):
     """A kind of service item based on the template. Any value that is not
     zero value will overwrite the value of the same attribute in the template.
