@@ -1,9 +1,6 @@
-import os
 from pathlib import Path
 from types import SimpleNamespace as Case
 import pytest
-
-from ruamel.yaml import YAML
 
 from mimus.config.parser import (
     Parser,
