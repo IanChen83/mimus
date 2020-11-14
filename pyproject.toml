@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "mimus"
+version = "0.1.0"
+description = "mimus aids in the setup of testing environments"
+authors = ["Ian Chen <ianchen83.tw@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/IanChen83/mimus"
+classifiers=[
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+    "Topic :: Software Development :: Testing :: Mocking",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8"
+]
+
+[tool.poetry.dependencies]
+python = "^3.6.1"
+click = "^7.1.2"
+python-hcl2 = "^2.0.0"
+
+[tool.poetry.dev-dependencies]
+behave = "^1.2.6"
+pytest = "^6.1.2"
+pytest-cov = "^2.10.1"
+pytest-datadir = "^1.3.1"
+behave-classy = "1.0.0"
+pytest-sugar = "^0.9.4"
+pre-commit = "^2.8.2"
+pytest-mock = "^3.3.1"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
