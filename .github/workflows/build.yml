@@ -1,4 +1,4 @@
-name: Test
+name: Build
 
 on:
   pull_request:
@@ -98,28 +98,41 @@ jobs:
       - name: Run functional tests
         run: poetry run behave -v
 
-  # release:
-  #   name: Release
-  #   runs-on: ubuntu-latest
-  #   needs: [unittest, functest]
-  #   if: github.ref == 'refs/heads/master'
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [unittest, functest]
+    if: github.ref == 'refs/heads/master'
 
-  #   steps:
-  #     - uses: actions/checkout@v1
-  #       with:
-  #         fetch-depth: 1
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v2
 
-  #     - uses: actions/setup-python@v1
-  #       with:
-  #         python-version: 3.7
+      - name: Setup Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-  #     - name: Install dependencies
-  #       run: |
-  #         python -m pip install --upgrade pip
-  #         pip install tox
+      - name: Setup cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/poetry
+          key: ${{ runner.os }}-build-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
-  #     - name: Release new version
-  #       env:
-  #         TWINE_USERNAME: __token__
-  #         TWINE_PASSWORD: ${{ secrets.pypiToken }}
-  #       run: tox -e release
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade poetry
+          poetry config cache-dir "~/.cache/poetry"
+          poetry config --list
+          poetry install -n -vv
+
+      - name: Build wheel package
+        run: poetry build -f wheel -vv
+
+      - name: Upload package
+        uses: actions/upload-artifact@v2
+        with:
+          path: dist/

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mimus"
-version = "0.1.0"
+version = "0.0.1"
 description = "mimus aids in the setup of testing environments"
 authors = ["Ian Chen <ianchen83.tw@gmail.com>"]
 license = "MIT"
@@ -15,6 +15,16 @@ classifiers=[
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9"
 ]
+include = [
+    "README.md",
+    "CHANGELOG.md"
+]
+
+# [tool.poetry.scripts]
+# mimus = "mimus.cli.main:main"
+
+[tool.poetry.urls]
+"Documentation" = "https://github.com/IanChen83/mimus#readme"
 
 [tool.poetry.dependencies]
 python = "^3.7.0"
