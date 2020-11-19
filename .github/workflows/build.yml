@@ -16,27 +16,41 @@ on:
 jobs:
   lint:
     name: Lint
+
     runs-on: ubuntu-latest
+
     steps:
-    - uses: actions/checkout@v1
-      with:
-        fetch-depth: 1
+      - name: Checkout source code
+        uses: actions/checkout@v2
 
-    - uses: actions/setup-python@v1
-      with:
-        python-version: 3.7
+      - name: Setup Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pylint black -r requirements.txt
+      - name: Setup cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/poetry
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
-    - name: Check formatting with black
-      run: black --check mimus
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade poetry
+          poetry config cache-dir "~/.cache/poetry"
+          poetry config --list
+          poetry install -n -vv --no-root
 
-    - name: Lint with pylint
-      run: pylint --rcfile=./.pylintrc --output-format=colorized --reports=y mimus
+      - name: Check formatting with black
+        run: poetry run black --check mimus
 
+      - name: Lint with pylint
+        run: poetry run pylint --rcfile=./.pylintrc --output-format=colorized --reports=y mimus
 
   unittest:
     name: Unit Test

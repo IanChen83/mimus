@@ -43,7 +43,7 @@ class Parser:
             try:
                 self.configs[file] = ConfigFile.loads(content, cwd)
             except ConfigError as e:
-                raise ConfigError(e, file=file)
+                raise ConfigError(e, file=file) from e
 
         return self.configs[file]
 
