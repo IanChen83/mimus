@@ -10,8 +10,8 @@ nav:
 
 theme:
   name: material
-  logo:
-    icon: 'language'
+  icon:
+    logo: 'fontawesome/solid/vial'
 # extra_css: [extra.css]
 markdown_extensions:
   - codehilite

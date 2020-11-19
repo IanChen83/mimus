@@ -11,13 +11,13 @@ classifiers=[
     "Intended Audience :: Developers",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Topic :: Software Development :: Testing :: Mocking",
-    "Programming Language :: Python :: 3.6",
     "Programming Language :: Python :: 3.7",
-    "Programming Language :: Python :: 3.8"
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9"
 ]
 
 [tool.poetry.dependencies]
-python = "^3.6.1"
+python = "^3.7.0"
 click = "^7.1.2"
 python-hcl2 = "^2.0.0"
 "ruamel.yaml" = "^0.16.12"
