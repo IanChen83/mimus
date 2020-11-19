@@ -95,7 +95,7 @@ jobs:
           poetry run pytest --cov --cov-report=term-missing
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == 3.7
+        if: github.ref == 'refs/heads/master'
         env:
           CODECOV_TOKEN: ${{ secrets.codecovRepoToken }}
         run: |
