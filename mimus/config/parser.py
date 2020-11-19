@@ -322,8 +322,7 @@ class ImportItem(ConfigItem, fields="path"):
 
 
 class StackItem(ConfigItem, fields="name,services", defaults=dict(services=[])):
-    """A stack that defines a list of services referenced by names.
-    """
+    """A stack that defines a list of services referenced by names."""
 
     _validate_name = _validate_name
 
@@ -364,7 +363,13 @@ class BasicServiceItem(
 class TemplateServiceItem(
     BasicServiceItem,
     fields="name,template,host,port,protocol,protocol_attrs,handler",
-    defaults=dict(host="", port=0, protocol="", protocol_attrs=None, handler=None,),
+    defaults=dict(
+        host="",
+        port=0,
+        protocol="",
+        protocol_attrs=None,
+        handler=None,
+    ),
 ):
     """A kind of service item based on the template. Any value that is not
     zero value will overwrite the value of the same attribute in the template.

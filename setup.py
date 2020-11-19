@@ -29,7 +29,8 @@ def _verify_version():
     ):
         raise ValueError(
             "Mismatched version between package version {0} and CHANGELOG.md {1}".format(
-                package_version, changelog_version,
+                package_version,
+                changelog_version,
             )
         )
 

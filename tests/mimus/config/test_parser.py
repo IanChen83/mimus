@@ -304,7 +304,10 @@ class Test_ImportItem:
         """
 
         cases = [
-            Case(kwargs={}, exception="'path' is a required field",),
+            Case(
+                kwargs={},
+                exception="'path' is a required field",
+            ),
             Case(
                 kwargs=dict(path=Path("non-existed-file")),
                 exception="should point to a file",
@@ -335,7 +338,10 @@ class Test_StackItem:
         """
 
         cases = [
-            Case(kwargs=dict(), exception="'name' is a required field",),
+            Case(
+                kwargs=dict(),
+                exception="'name' is a required field",
+            ),
             Case(
                 kwargs=dict(name="name", services=dict()),
                 exception="services should be of type sequence",
@@ -401,7 +407,9 @@ class Test_TemplateServiceItem:
 
         with pytest.raises(ConfigError) as excinfo:
             TemplateServiceItem(
-                name="name", template="", handler="",
+                name="name",
+                template="",
+                handler="",
             )
 
         assert "template should be a non-empty string" in str(excinfo.value)
