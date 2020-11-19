@@ -35,8 +35,6 @@ jobs:
             ~/.cache/pip
             ~/.cache/poetry
           key: ${{ runner.os }}-lint-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-lint-
 
       - name: Install dependencies
         run: |

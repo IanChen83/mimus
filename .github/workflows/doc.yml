@@ -28,8 +28,6 @@ jobs:
           path: |
             ~/.cache/pip
           key: ${{ runner.os }}-doc
-          restore-keys: |
-            ${{ runner.os }}-
 
       - name: Set up dependencies
         run: |

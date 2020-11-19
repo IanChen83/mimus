@@ -37,9 +37,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/poetry
-          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.python-version }}-
+          key: ${{ runner.os }}-test-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
         run: |
@@ -87,9 +85,7 @@ jobs:
           path: |
             ~/.cache/pip
             ~/.cache/poetry
-          key: ${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.python-version }}-
+          key: ${{ runner.os }}-functest-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
       - name: Install dependencies
         run: |
