@@ -73,13 +73,12 @@ jobs:
       # TODO:
       #   Debug AttributeError: module 'regex' has no attribute 'findall'
       # during installing lark-parser-0.10.1
-      #
-      # - name: Setup cache
-      #   uses: actions/cache@v2
-      #   with:
-      #     path: |
-      #       ~/.cache/pip
-      #     key: ${{ runner.os }}-test-${{ matrix.python-version }}
+      - name: Setup cache
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/pip
+          key: ${{ runner.os }}-test-${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
@@ -99,7 +98,7 @@ jobs:
         env:
           CODECOV_TOKEN: ${{ secrets.codecovRepoToken }}
         run: |
-          poetry run codecov --flags unittest --env PYTHON_VERSION
+          poetry run codecov --flags unittest python-$PYTHON_VERSION
 
   build:
     name: Build
